@@ -126,6 +126,55 @@ The matched-sample median control is recorded with the image-only models, so the
 
 On this small, leakage-aware image-only pilot, log-target frozen visual features improve SMAPE by 0.996 points over the matched median. This is evidence of a weak visual signal, not evidence that vision outperforms text: the pilot uses a much smaller validation sample than the full text baseline, and no cross-modal comparison has been performed yet.
 
+### Matched text comparison
+
+The next experiment uses the **exact same** 800 training and 200 validation sample IDs from the cached image pilot, with the same duplicate-grouped split. It therefore supports a direct text-versus-image comparison without changing the labelled products:
+
+```powershell
+python scripts/run_matched_text_baselines.py --data-root $env:DATA_ROOT
+```
+
+| Matched 800/200 experiment | SMAPE | MAE | RMSE |
+| --- | ---: | ---: | ---: |
+| Median control | 71.936 | 16.685 | 29.773 |
+| ResNet-18 image embeddings + log-Ridge | **70.940** | **16.619** | 28.309 |
+| Structured text LightGBM, direct price | 86.482 | 21.041 | 30.384 |
+| Structured text LightGBM, `log1p(price)` | 78.125 | 18.048 | 29.675 |
+
+On this small matched pilot, frozen image embeddings are stronger than the deliberately lightweight structured-text features. That should not be overinterpreted as a general modality ranking: 800 training products is too few for a stable conclusion, these text features are non-semantic, and the full-data text baseline remains substantially stronger than either tiny-pilot result. The appropriate next comparison is a simple late-fusion model on this exact same sample.
+
+### Fixed-weight late fusion
+
+The first fusion experiment is deliberately transparent: independently train the log-target image Ridge and structured-text LightGBM models on the same 800 products, then average their original-price predictions with a fixed 50/50 weight. The validation set is not used to pick the fusion weight.
+
+```powershell
+python scripts/run_late_fusion_pilot.py --data-root $env:DATA_ROOT
+```
+
+| Matched 800/200 log-target model | SMAPE | MAE | RMSE |
+| --- | ---: | ---: | ---: |
+| Image-only Ridge | 70.940 | 16.619 | 28.309 |
+| Text-only LightGBM | 78.125 | 18.048 | 29.675 |
+| Fixed 50/50 late fusion | **69.922** | **16.179** | **27.395** |
+
+The fixed blend improves this pilot’s SMAPE by 1.018 points relative to its image component. This is a small, single-split result; it is evidence to test the fusion hypothesis at a larger predeclared scale, not confirmation that fixed fusion generalizes.
+
+### Training-only selected late fusion
+
+To test learned fusion without choosing a weight on the outer holdout, this experiment makes five GroupKFold splits of the 800 training products (grouped by exact catalog text), generates out-of-fold predictions from both component models, and selects a convex blend weight from 0.00 to 1.00 in 0.05 increments by OOF SMAPE. It refits the components on all 800 training products before evaluating the 200-product outer holdout.
+
+```powershell
+python scripts/run_oof_late_fusion_pilot.py --data-root $env:DATA_ROOT
+```
+
+The five-fold training-only OOF procedure selected a 60% text / 40% image blend (inner OOF SMAPE 67.738). Its outer-holdout score was SMAPE 70.472, MAE 16.324, and RMSE 27.605. It improves on image-only but does not beat the fixed 50/50 reference at this scale, so the project retains equal-weight fusion as the clearer pilot baseline.
+
+### Predeclared scale-5,000 confirmation study
+
+The next matched experiment is locked to `seed=2026`, 4,000 training products, and 1,000 validation products. It uses a separate cache and separate ignored result logs, avoiding any mix with the 800/200 pilot. It still uses no test data.
+
+The complete research decisions, active experiment design, execution plan, and interpretation limits are maintained in [PROJECT_LOG.md](PROJECT_LOG.md).
+
 ## Limitations
 
 Structured text features are not semantic text understanding. Image files are inspected only as metadata in Milestone 1; their pixels are not processed. The validation design blocks exact duplicate leakage but not all related-product leakage.

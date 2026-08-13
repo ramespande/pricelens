@@ -10,6 +10,7 @@ import csv
 import hashlib
 import json
 import logging
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterator
@@ -92,6 +93,20 @@ def _write_failures(path: Path, failures: list[dict[str, str]]) -> None:
         writer.writerows(failures)
 
 
+def _atomic_save_embeddings(path: Path, embeddings: np.ndarray) -> None:
+    """Write a complete NPY file before atomically replacing the previous cache."""
+    temporary = path.with_name(f"{path.stem}.tmp.npy")
+    np.save(temporary, embeddings)
+    os.replace(temporary, path)
+
+
+def _atomic_write_manifest(path: Path, rows: list[dict[str, object]]) -> None:
+    """Write a complete manifest before atomically replacing the previous version."""
+    temporary = path.with_name(f"{path.stem}.tmp.csv")
+    pd.DataFrame(rows).to_csv(temporary, index=False)
+    os.replace(temporary, path)
+
+
 def _load_model(device: str):
     try:
         import torch
@@ -146,8 +161,8 @@ def extract_embeddings(rows: pd.DataFrame, config: VisionPilotConfig) -> dict[st
                 output = model(torch.stack(tensors).to(config.device)).cpu().numpy().astype(np.float32)
             all_embeddings.extend(output)
             all_rows.extend({"sample_id": row.sample_id, "image_link": row.image_link, "image_path": str(row.image_path)} for row in valid)
-            np.save(config.output_dir / "embeddings.npy", np.asarray(all_embeddings, dtype=np.float32))
-            pd.DataFrame(all_rows).to_csv(config.output_dir / "manifest.csv", index=False)
+            _atomic_save_embeddings(config.output_dir / "embeddings.npy", np.asarray(all_embeddings, dtype=np.float32))
+            _atomic_write_manifest(config.output_dir / "manifest.csv", all_rows)
         LOGGER.info("Processed %s/%s rows", min(start + config.batch_size, len(remaining)), len(remaining))
     _write_failures(config.output_dir / "failed_images.csv", failures)
     return {"requested": len(rows), "completed": len(all_rows), "failed": len(failures), "skipped": len(existing)}

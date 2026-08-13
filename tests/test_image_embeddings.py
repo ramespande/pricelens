@@ -1,7 +1,8 @@
 from pathlib import Path
 import pandas as pd
 import pytest
-from src.features.image_embeddings import VisionPilotConfig, image_filename, select_pilot_rows
+import numpy as np
+from src.features.image_embeddings import VisionPilotConfig, _atomic_save_embeddings, image_filename, select_pilot_rows
 
 def test_image_filename_extracts_url_basename():
     assert image_filename("https://example.test/a/b/name.jpg?x=1") == "name.jpg"
@@ -25,3 +26,9 @@ def test_select_pilot_rows_requires_existing_images(tmp_path: Path):
     (tmp_path / "train" / "images").mkdir(parents=True)
     frame = pd.DataFrame({"sample_id":[1], "image_link":["https://x/nope.jpg"]})
     with pytest.raises(ValueError): select_pilot_rows(frame, VisionPilotConfig(data_root=tmp_path, sample_size=1))
+
+def test_atomic_embedding_save_replaces_complete_array(tmp_path: Path):
+    path = tmp_path / "embeddings.npy"
+    _atomic_save_embeddings(path, np.ones((2, 3), dtype=np.float32))
+    _atomic_save_embeddings(path, np.zeros((3, 3), dtype=np.float32))
+    assert np.load(path).shape == (3, 3)
