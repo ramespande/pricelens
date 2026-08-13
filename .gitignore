@@ -1,0 +1,30 @@
+# Local dataset and generated data
+archive/
+data/raw/*
+data/interim/*
+data/processed/*
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+embeddings/
+models/
+checkpoints/
+*.npy
+*.npz
+*.pt
+*.pth
+
+# Generated outputs
+reports/figures/*
+!reports/figures/.gitkeep
+experiments/results/*
+!experiments/results/.gitkeep
+
+# Python and notebooks
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+venv/
+.env
