@@ -9,6 +9,7 @@ data/processed/*
 embeddings/
 models/
 checkpoints/
+data/processed/image_embeddings/
 *.npy
 *.npz
 *.pt

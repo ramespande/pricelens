@@ -85,6 +85,47 @@ The local train image directory contains 72,287 files (16.42 GiB) and the test d
 
 Development is designed for CPU-only use. Future work will first cache batched, resumable embeddings from small image samples, then compare text-only, image-only, concatenation, late fusion, and adaptive gated fusion. Those methods will be treated as hypotheses and evaluated against strong baselines, including missing-modality and error analyses.
 
+## Milestone 2: vision-embedding pilot
+
+The first vision experiment is deliberately bounded to 500 unique locally available training images. It uses torchvision ResNet-18 ImageNet-1K V1 as a frozen feature extractor, removes its classification head, and caches 512-dimensional `float32` embeddings. The model has 11.7M parameters, needs 1.81 GFLOPs per image, and downloads 44.7 MB of weights; torchvision supplies the official resize/crop/normalization transform. The torchvision repository is BSD-3-Clause licensed. The PyTorch CPU runtime is materially larger than the weights, so it is installed only when this pilot is desired. [Model documentation](https://docs.pytorch.org/vision/stable/models/generated/torchvision.models.resnet18.html) [torchvision license](https://github.com/pytorch/vision/blob/main/LICENSE)
+
+No raw image or embedding is tracked by Git. Validate the deterministic selection without loading a model:
+
+```powershell
+python scripts/extract_image_embeddings.py --data-root $env:DATA_ROOT --dry-run
+```
+
+After installing the updated requirements, run the 500-image CPU pilot:
+
+```powershell
+pip install -r requirements.txt
+python scripts/extract_image_embeddings.py --data-root $env:DATA_ROOT
+```
+
+The command is resumable: it records `manifest.csv`, writes failed image reads to `failed_images.csv`, avoids duplicate image links during selection, and skips completed sample IDs on rerun. The cache lives below `data/processed/image_embeddings/` and remains ignored.
+
+### Verified pilot run
+
+On the local CPU environment, the deterministic `seed=42` pilot completed 500/500 selected unique train images with zero failed reads. It produced a finite `(500, 512)` `float32` embedding matrix (1,024,128 bytes on disk). A second run skipped all 500 completed sample IDs, confirming resumability. These embeddings are infrastructure validation only; no price model has been trained on them yet.
+
+### Next: leakage-aware image-only baseline
+
+`scripts/run_image_baseline_pilot.py` creates the same duplicate-grouped 80/20 split before sampling 800 training and 200 validation images. It then uses frozen 512-dimensional ResNet-18 embeddings with regularized Ridge regression, evaluating direct-price and `log1p(price)` targets only on the 200-image validation sample. This is a small-sample feasibility experiment, not a comparison to the full text baseline.
+
+```powershell
+python scripts/run_image_baseline_pilot.py --data-root $env:DATA_ROOT
+```
+
+The matched-sample median control is recorded with the image-only models, so the pilot measures whether frozen visual features add value over a trivial baseline on exactly the same 800/200 labels.
+
+| Image-pilot experiment (800 train / 200 validation) | SMAPE | MAE | RMSE |
+| --- | ---: | ---: | ---: |
+| Matched training median | 71.936 | 16.685 | 29.773 |
+| ResNet-18 + Ridge, direct price | 87.040 | 19.602 | **27.519** |
+| ResNet-18 + Ridge, `log1p(price)` | **70.940** | **16.619** | 28.309 |
+
+On this small, leakage-aware image-only pilot, log-target frozen visual features improve SMAPE by 0.996 points over the matched median. This is evidence of a weak visual signal, not evidence that vision outperforms text: the pilot uses a much smaller validation sample than the full text baseline, and no cross-modal comparison has been performed yet.
+
 ## Limitations
 
 Structured text features are not semantic text understanding. Image files are inspected only as metadata in Milestone 1; their pixels are not processed. The validation design blocks exact duplicate leakage but not all related-product leakage.

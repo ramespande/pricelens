@@ -6,3 +6,7 @@ seaborn>=0.12
 lightgbm>=4.0
 jupyter>=1.0
 pytest>=7.0
+# Milestone 2 vision pilot (CPU-only installation supported)
+pillow>=10.0
+torch>=2.2
+torchvision>=0.17

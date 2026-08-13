@@ -1,0 +1,11 @@
+{
+  "data_root": null,
+  "split": "train",
+  "sample_size": 500,
+  "random_seed": 42,
+  "batch_size": 8,
+  "num_workers": 0,
+  "device": "cpu",
+  "encoder": "resnet18_imagenet1k_v1",
+  "output_dir": "data/processed/image_embeddings/resnet18_train_pilot"
+}

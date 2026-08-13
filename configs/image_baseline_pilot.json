@@ -1,0 +1,12 @@
+{
+  "data_root": null,
+  "random_seed": 42,
+  "validation_fraction": 0.2,
+  "train_sample_size": 800,
+  "validation_sample_size": 200,
+  "batch_size": 8,
+  "num_workers": 0,
+  "device": "cpu",
+  "encoder": "resnet18_imagenet1k_v1",
+  "output_dir": "data/processed/image_embeddings/resnet18_image_baseline_pilot"
+}
