@@ -27,7 +27,8 @@ Research question: *How much incremental predictive value does visual informatio
 | Matched text pilot | Complete | Same subset; text log-LightGBM SMAPE 78.125. |
 | Simple late fusion | Complete | Fixed 50/50 late fusion: SMAPE 69.922 on the matched 800/200 pilot. |
 | OOF-selected late fusion | Complete | OOF selected 60% text / 40% image; outer SMAPE 70.472. |
-| Scale-5,000 matched study | In progress | Predeclared seed 2026; 4,000 training / 1,000 validation products. |
+| Scale-5,000 matched study | Complete | Predeclared seed 2026; 4,000 training / 1,000 validation products. |
+| Semantic text baseline | Complete | Full split MiniLM-L6-v2 log-LightGBM SMAPE 62.013; matched scale SMAPE 66.641. |
 
 ## Current experiment design
 
@@ -44,13 +45,12 @@ Research question: *How much incremental predictive value does visual informatio
 3. **Use a small pilot first.** 1,000 images validate data paths, caching, and methodology before any larger extraction.
 4. **Compare modalities on identical labels.** The matched 800/200 experiment avoids confusing a modality comparison with a changed validation set.
 5. **Use fixed-weight late fusion before adaptive fusion.** It supplies a transparent reference point. Learned/gated fusion is deferred until its comparison protocol is designed.
+6. **Use all-MiniLM-L6-v2 for the first semantic text baseline.** It has 22M parameters, ~80 MB weights, 384-dimensional output, Apache-2.0 license, and runs on CPU via `sentence-transformers`. [Model card](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
 
 ## Active and next plan
 
-1. Complete the predeclared 4,000/1,000 matched scale study. *(Active)*
-2. Establish a stronger semantic text-embedding baseline, after documenting model size, license, and CPU/cloud requirements.
-3. Compare concatenation, training-only-selected late fusion, and adaptive/gated fusion fairly.
-4. Run robustness and error analyses by price range, text length, image availability, and modality disagreement.
+1. Compare concatenation, training-only-selected late fusion, and adaptive/gated fusion fairly, using semantic text embeddings where appropriate. *(Active)*
+2. Run robustness and error analyses by price range, text length, image availability, and modality disagreement.
 
 ## Interpretation limits
 
@@ -58,9 +58,15 @@ The 800/200 pilot is too small to establish a stable modality ranking. Its struc
 
 ## Latest result
 
-On the matched 800/200 pilot, the pre-specified fixed 50/50 blend achieved SMAPE **69.922**, MAE **16.179**, and RMSE **27.395**. It improves on the image component (SMAPE 70.940) and text component (SMAPE 78.125). Because the blend weight was fixed before this evaluation, the result does not tune a fusion parameter on validation; nevertheless, this is a single small pilot and requires confirmation at a larger, predeclared scale.
+The first semantic text baseline uses frozen `sentence-transformers/all-MiniLM-L6-v2` embeddings (22M parameters, ~80 MB, Apache-2.0, 384-D) with LightGBM on the deterministic 80/20 duplicate-grouped split (`seed=42`). Log-target semantic text reached SMAPE **62.013** (MAE 14.282; RMSE 37.781), improving on the structured-text log baseline (SMAPE **64.277**) on the same full split.
 
-The training-only five-fold OOF protocol selected a 60% text / 40% image convex blend, with inner OOF SMAPE 67.738. Its outer-holdout SMAPE was **70.472** (MAE 16.324; RMSE 27.605): better than image-only but worse than the fixed blend. At this small scale, training-only blend selection is noisy, so it does not justify replacing the transparent equal-weight reference.
+On the predeclared 4,000/1,000 matched scale study (`seed=2026`), semantic log-LightGBM SMAPE was **66.641**, essentially matching structured text (SMAPE **66.665**) and still beating image log-Ridge (SMAPE **69.881**). Fixed 50/50 late fusion remains SMAPE **65.661** and OOF-selected fusion SMAPE **65.358** on that matched sample using structured text features.
+
+Semantic embeddings strengthen the full-data text reference, but the matched multimodal study still used structured text. The next fair comparison should rerun fusion with cached semantic text on the same 5,000 products.
+
+### Prior 800/200 pilot (reference)
+
+On the matched 800/200 pilot, the pre-specified fixed 50/50 blend achieved SMAPE **69.922**, MAE **16.179**, and RMSE **27.395**. It improves on the image component (SMAPE 70.940) and text component (SMAPE 78.125). The training-only OOF protocol selected 60% text / 40% image (inner OOF SMAPE 67.738) with outer-holdout SMAPE **70.472** — worse than the fixed blend at that scale.
 
 ## Predeclared scale study
 
@@ -68,4 +74,4 @@ The next confirmation study uses the new `configs/image_baseline_scale_5000.json
 
 ### Execution incident
 
-During the first scale-5,000 extraction, a time-limited process was interrupted while rewriting `embeddings.npy`, leaving a generated cache with a mismatched header and payload. No original data or prior cache was changed. The cache writer now saves to a temporary file and atomically replaces the completed cache; the corrupted scale-specific cache will be regenerated using the unchanged predeclared configuration.
+During the first scale-5,000 extraction, a time-limited process was interrupted while rewriting `embeddings.npy`, leaving a generated cache with a mismatched header and payload. No original data or prior cache was changed. The cache writer now saves to a temporary file and atomically replaces the completed cache. The scale-specific cache was subsequently regenerated to 5,000 finite embeddings (4,000 train / 1,000 validation) and used for the completed study. Local results are in `experiments/results/*_scale_5000.csv`.

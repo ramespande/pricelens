@@ -1,0 +1,12 @@
+{
+  "data_root": null,
+  "random_seed": 2026,
+  "validation_fraction": 0.2,
+  "train_sample_size": 4000,
+  "validation_sample_size": 1000,
+  "encoder": "sentence-transformers/all-MiniLM-L6-v2",
+  "batch_size": 64,
+  "device": "cpu",
+  "output_dir": "data/processed/text_embeddings/minilm_l6_v2_matched_scale_5000",
+  "manifest_source": "data/processed/image_embeddings/resnet18_matched_scale_5000/manifest.csv"
+}

@@ -1,0 +1,10 @@
+{
+  "data_root": null,
+  "random_seed": 42,
+  "validation_fraction": 0.2,
+  "encoder": "sentence-transformers/all-MiniLM-L6-v2",
+  "batch_size": 64,
+  "device": "cpu",
+  "output_dir": "data/processed/text_embeddings/minilm_l6_v2_train_full",
+  "manifest_source": null
+}
