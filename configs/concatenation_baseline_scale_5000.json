@@ -1,0 +1,11 @@
+{
+  "random_seed": 2026,
+  "validation_fraction": 0.2,
+  "train_sample_size": 4000,
+  "validation_sample_size": 1000,
+  "image_output_dir": "data/processed/image_embeddings/resnet18_matched_scale_5000",
+  "text_output_dir": "data/processed/text_embeddings/minilm_l6_v2_matched_scale_5000",
+  "encoder": "sentence-transformers/all-MiniLM-L6-v2",
+  "image_encoder": "resnet18_imagenet1k_v1",
+  "notes": "Early/concatenation fusion: horizontally stacks 384-D semantic text and 512-D image embeddings into a single 896-D feature vector for a LightGBM regressor. Same matched 5K sample as semantic_fusion_scale_5000."
+}

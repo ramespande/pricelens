@@ -178,3 +178,63 @@ The complete research decisions, active experiment design, execution plan, and i
 ## Limitations
 
 Structured text features are not semantic text understanding. Image files are inspected only as metadata in Milestone 1; their pixels are not processed. The validation design blocks exact duplicate leakage but not all related-product leakage.
+
+## Semantic fusion at scale 5,000
+
+The next fair multimodal comparison reuses the cached 4,000/1,000 matched sample (seed=2026) but replaces the non-semantic structured text features with the already-cached MiniLM-L6-v2 semantic embeddings. Both fixed 50/50 and OOF-selected weights are evaluated on the same outer holdout under the same experimental protocol as the prior late-fusion study.
+
+```powershell
+python scripts/run_semantic_late_fusion_scale.py --data-root $env:DATA_ROOT
+```
+
+Results are written to `experiments/results/semantic_fusion_scale_5000.csv`. The script does not re-extract any embeddings; it requires that both the image cache (`data/processed/image_embeddings/resnet18_matched_scale_5000`) and the text cache (`data/processed/text_embeddings/minilm_l6_v2_matched_scale_5000`) already exist.
+
+## Concatenation baseline at scale 5,000
+
+Early/concatenation fusion: the 384-D semantic text embedding and the 512-D image embedding are horizontally stacked into a single 896-D joint feature vector, which is passed to a single LightGBM regressor. This tests whether a unified model extracting cross-modal interactions outperforms independent component models combined in a late-fusion step.
+
+```powershell
+python scripts/run_concatenation_baseline_scale.py --data-root $env:DATA_ROOT
+```
+
+Results are written to `experiments/results/concatenation_baseline_scale_5000.csv`.
+
+## Adaptive (gated) fusion at scale 5,000
+
+A shallow MLP gating network learns per-sample modality weights from the concatenated [text; image] embedding. For each sample it produces a scalar gate `g ∈ (0, 1)` such that the fused log-price prediction is `g * log_text_pred + (1 - g) * log_image_pred`. The gate is a 2-layer network (896 → 128 ReLU → 1 Sigmoid) trained with Adam and early stopping on a 15% inner training hold-out. It is implemented in pure NumPy so no additional torch dependency is introduced. The outer validation holdout plays no role in gate training.
+
+```powershell
+python scripts/run_adaptive_fusion_scale.py --data-root $env:DATA_ROOT
+```
+
+Results are written to `experiments/results/adaptive_fusion_scale_5000.csv`. Optional arguments `--epochs`, `--hidden`, and `--batch-size` allow lightweight ablation.
+
+## Robustness and error analysis
+
+Once any fusion experiment has been run, the error analysis script segments validation residuals by three factors:
+
+- **Price decile** — reveals whether the model is systematically worse for cheap or expensive products.
+- **Catalog content text length quartile** — identifies whether thin or verbose product descriptions affect accuracy.
+- **Modality disagreement quartile** — measures whether large text/image prediction gaps correlate with higher error, which would motivate adaptive fusion.
+
+```powershell
+python scripts/run_error_analysis.py --data-root $env:DATA_ROOT [--figures]
+```
+
+Results are written to `experiments/results/error_analysis_scale_5000.csv`. Pass `--figures` to also save matplotlib bar charts under `reports/figures/`.
+
+### Verified scale-5,000 comparison
+
+All models below use the same predeclared 4,000/1,000 matched sample (`seed=2026`) and cached MiniLM-L6-v2 text plus ResNet-18 image embeddings where applicable.
+
+| Model | SMAPE | MAE | RMSE |
+| --- | ---: | ---: | ---: |
+| Semantic text LightGBM | 66.641 | 14.735 | 30.231 |
+| Image Ridge | 69.881 | 16.009 | 32.290 |
+| Fixed 50/50 late fusion | 65.881 | 14.763 | 30.591 |
+| OOF-selected late fusion | 65.472 | — | — |
+| Adaptive OOF-supervised MLP gate | 65.480 | 14.586 | 30.333 |
+| Concatenation LightGBM, direct price | 72.278 | 16.192 | 27.845 |
+| **Concatenation LightGBM, log target** | **63.477** | **14.095** | **29.316** |
+
+Concatenation is the strongest result on this single held-out study. The adaptive gate varied its text weight across validation examples, but did not outperform the simpler methods; the project therefore does not claim that adaptive fusion is beneficial yet.

@@ -29,6 +29,10 @@ Research question: *How much incremental predictive value does visual informatio
 | OOF-selected late fusion | Complete | OOF selected 60% text / 40% image; outer SMAPE 70.472. |
 | Scale-5,000 matched study | Complete | Predeclared seed 2026; 4,000 training / 1,000 validation products. |
 | Semantic text baseline | Complete | Full split MiniLM-L6-v2 log-LightGBM SMAPE 62.013; matched scale SMAPE 66.641. |
+| Semantic late fusion (scale 5K) | Complete | Fixed: SMAPE 65.881; OOF-selected: 65.472. MiniLM-L6-v2 + ResNet-18. |
+| Concatenation baseline (scale 5K) | Complete | 896-D [text; image] LightGBM: SMAPE 63.477 (best scale-5K result). |
+| Adaptive gated fusion (scale 5K) | Complete | OOF-supervised MLP gate: SMAPE 65.480; did not beat simpler fusion. |
+| Error analysis | Complete | Segmented fixed semantic-fusion residuals by price, text length, and disagreement; three local figures saved. |
 
 ## Current experiment design
 
@@ -46,11 +50,19 @@ Research question: *How much incremental predictive value does visual informatio
 4. **Compare modalities on identical labels.** The matched 800/200 experiment avoids confusing a modality comparison with a changed validation set.
 5. **Use fixed-weight late fusion before adaptive fusion.** It supplies a transparent reference point. Learned/gated fusion is deferred until its comparison protocol is designed.
 6. **Use all-MiniLM-L6-v2 for the first semantic text baseline.** It has 22M parameters, ~80 MB weights, 384-dimensional output, Apache-2.0 license, and runs on CPU via `sentence-transformers`. [Model card](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
+7. **Run semantic fusion at scale 5K using the same cached embeddings.** Both the image cache (`resnet18_matched_scale_5000`) and the text cache (`minilm_l6_v2_matched_scale_5000`) are reused without re-extraction. The fusion weight is pre-specified (50/50) or selected from training-only OOF predictions, as before.
+8. **Use a single LightGBM for the concatenation baseline.** Horizontally stacking text (384-D) and image (512-D) into a 896-D joint vector and fitting one LightGBM is the simplest early-fusion approach. No weight tuning is needed and it is directly comparable to the late-fusion baselines.
+9. **Implement the adaptive gate in pure NumPy (no torch).** The gating MLP is a shallow 2-layer network (d_in → 128 → 1, ReLU + Sigmoid) trained with mini-batch Adam (lr=1e-3, weight_decay=1e-4) and early stopping (patience=20, 15% inner split). It learns from five-fold OOF component predictions, not in-sample predictions. Avoiding a new torch dependency keeps the gate CPU-friendly and within the existing environment.
+10. **Error analysis segments the fixed semantic fusion model.** The fixed 50/50 semantic fusion is the most transparent model and serves as the reference for decomposing errors by price range, text length, and modality disagreement. This produces actionable signals for future feature engineering or encoder upgrades.
 
 ## Active and next plan
 
-1. Compare concatenation, training-only-selected late fusion, and adaptive/gated fusion fairly, using semantic text embeddings where appropriate. *(Active)*
-2. Run robustness and error analyses by price range, text length, image availability, and modality disagreement.
+1. ~~Compare concatenation, training-only-selected late fusion, and adaptive/gated fusion fairly, using semantic text embeddings where appropriate.~~ *(Implemented — see scripts below)*
+2. ~~Run robustness and error analyses by price range, text length, image availability, and modality disagreement.~~ *(Implemented — `scripts/run_error_analysis.py`)*
+3. ~~Run the implemented scripts against the local dataset and record results.~~ *(Complete; results below.)*
+4. **Evaluate cross-validation stability** of concatenation fusion using multiple predeclared seeds. *(Active next step.)*
+5. **Evaluate a stronger image encoder** (e.g., ResNet-50 or EfficientNet-B0) only if multi-seed results identify image representation as a bottleneck.
+6. Compare missing-modality robustness and investigate category-like error segments only when a reliable derivation is defined.
 
 ## Interpretation limits
 
@@ -63,6 +75,26 @@ The first semantic text baseline uses frozen `sentence-transformers/all-MiniLM-L
 On the predeclared 4,000/1,000 matched scale study (`seed=2026`), semantic log-LightGBM SMAPE was **66.641**, essentially matching structured text (SMAPE **66.665**) and still beating image log-Ridge (SMAPE **69.881**). Fixed 50/50 late fusion remains SMAPE **65.661** and OOF-selected fusion SMAPE **65.358** on that matched sample using structured text features.
 
 Semantic embeddings strengthen the full-data text reference, but the matched multimodal study still used structured text. The next fair comparison should rerun fusion with cached semantic text on the same 5,000 products.
+
+### Scale-5,000 semantic fusion results
+
+All models below use the same predeclared `seed=2026` sample: 4,000 training and 1,000 outer-validation products, cached 384-D MiniLM text embeddings, and cached 512-D ResNet-18 image embeddings.
+
+| Model | Validation SMAPE | MAE | RMSE |
+| --- | ---: | ---: | ---: |
+| Semantic text LightGBM | 66.641 | 14.735 | 30.231 |
+| Image Ridge | 69.881 | 16.009 | 32.290 |
+| Fixed 50/50 late fusion | 65.881 | 14.763 | 30.591 |
+| OOF-selected late fusion (70% text) | 65.472 | — | — |
+| Adaptive OOF-supervised gate | 65.480 | 14.586 | 30.333 |
+| Concatenation LightGBM, direct price | 72.278 | 16.192 | 27.845 |
+| **Concatenation LightGBM, log target** | **63.477** | **14.095** | **29.316** |
+
+Concatenation is the strongest model on this one split, improving SMAPE by 3.164 points over semantic text alone and 2.404 points over fixed late fusion. The gate has meaningful variation on validation (mean text weight 0.636, standard deviation 0.278) but does not beat OOF late fusion, so this experiment does not support its additional complexity yet.
+
+### Scale-5,000 error analysis
+
+For fixed semantic late fusion, error is highest at the price extremes: SMAPE is 127.120 in the cheapest decile (0.4-3.5) and 109.080 in the most expensive decile (50.0-333.3), versus 27.671-52.068 across the middle deciles. Longer catalog content is associated with lower SMAPE (74.478 for the shortest quartile versus 57.402 for the longest). Disagreement is not monotonic: lowest-disagreement SMAPE is 65.129, while highest-disagreement SMAPE is 68.313. This supports further price-aware error work, but not a simple rule that high modality disagreement implies failure.
 
 ### Prior 800/200 pilot (reference)
 

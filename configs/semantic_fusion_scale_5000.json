@@ -1,0 +1,11 @@
+{
+  "random_seed": 2026,
+  "validation_fraction": 0.2,
+  "train_sample_size": 4000,
+  "validation_sample_size": 1000,
+  "image_output_dir": "data/processed/image_embeddings/resnet18_matched_scale_5000",
+  "text_output_dir": "data/processed/text_embeddings/minilm_l6_v2_matched_scale_5000",
+  "encoder": "sentence-transformers/all-MiniLM-L6-v2",
+  "image_encoder": "resnet18_imagenet1k_v1",
+  "notes": "Semantic text + ResNet-18 image fusion at scale 5000. Reuses cached embeddings from image_baseline_scale_5000 and text_embedding_matched_scale_5000 experiments."
+}
